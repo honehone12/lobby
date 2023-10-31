@@ -1,24 +1,24 @@
 package context
 
 import (
-	"lobby/storage"
+	"lobby/lobby/lobby"
 
 	"github.com/gorilla/websocket"
 )
 
 type Components struct {
-	lobbyStore        storage.LobbyStore
+	lobbyStore        lobby.LobbyStore
 	webSocketSwticher *websocket.Upgrader
 }
 
-func NewComponents(s storage.LobbyStore) *Components {
+func NewComponents(s lobby.LobbyStore) *Components {
 	return &Components{
 		lobbyStore:        s,
 		webSocketSwticher: &websocket.Upgrader{},
 	}
 }
 
-func (c *Components) LobbyStore() storage.LobbyStore {
+func (c *Components) LobbyStore() lobby.LobbyStore {
 	return c.lobbyStore
 }
 

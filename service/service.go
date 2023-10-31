@@ -1,9 +1,9 @@
 package service
 
 import (
+	"lobby/lobby/lobby"
 	"lobby/server"
 	"lobby/server/context"
-	"lobby/storage/memstore"
 
 	"github.com/labstack/echo/v4"
 )
@@ -15,7 +15,7 @@ func Run() {
 		e,
 		context.NewMetadata("LobyService", "0.0.1"),
 		context.NewComponents(
-			memstore.NewMemstore(),
+			lobby.NewMemLobyStore(),
 		),
 		"127.0.0.1:9990",
 	).Run()

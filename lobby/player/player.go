@@ -12,11 +12,11 @@ type Player struct {
 	connection *websocket.Conn
 }
 
-func NewPlayer(name string, connection *websocket.Conn) *Player {
+func NewPlayer(name string) *Player {
 	return &Player{
 		id:         libuuid.NewString(),
 		name:       name,
-		connection: connection,
+		connection: nil,
 	}
 }
 
@@ -26,4 +26,16 @@ func (p *Player) Id() string {
 
 func (p *Player) Name() string {
 	return p.name
+}
+
+func (p *Player) HasConnection() bool {
+	return p.connection != nil
+}
+
+func (p *Player) Connection() *websocket.Conn {
+	return p.connection
+}
+
+func (p *Player) SetConnection(conn *websocket.Conn) {
+	p.connection = conn
 }

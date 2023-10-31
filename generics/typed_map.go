@@ -1,0 +1,48 @@
+package generics
+
+import (
+	"errors"
+	"sync"
+)
+
+type MapItem interface{}
+
+type TypedMap[T MapItem] struct {
+	count int
+	inner *sync.Map
+}
+
+var (
+	ErrorNoSuchItem = errors.New("no such item")
+	ErrorCastFail   = errors.New("failed to cast item")
+)
+
+func NewTypedMap[T MapItem]() *TypedMap[T] {
+	return &TypedMap[T]{
+		count: 0,
+		inner: &sync.Map{},
+	}
+}
+
+func (m *TypedMap[T]) Count() int {
+	return m.count
+}
+
+func (m *TypedMap[T]) Add(key string, t *T) {
+	if _, exists := m.inner.LoadOrStore(key, t); !exists {
+		m.count++
+	}
+}
+
+func (m *TypedMap[T]) Item(key string) (*T, error) {
+	i, ok := m.inner.Load(key)
+	if ok {
+		t, ok := i.(*T)
+		if !ok {
+			return nil, ErrorCastFail
+		}
+		return t, nil
+	} else {
+		return nil, ErrorNoSuchItem
+	}
+}
