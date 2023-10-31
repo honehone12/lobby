@@ -28,13 +28,32 @@ func (m *TypedMap[T]) Count() int {
 	return m.count
 }
 
-func (m *TypedMap[T]) Add(key string, t *T) {
+func (m *TypedMap[T]) Add(key string, t T) {
 	if _, exists := m.inner.LoadOrStore(key, t); !exists {
 		m.count++
 	}
 }
 
-func (m *TypedMap[T]) Item(key string) (*T, error) {
+func (m *TypedMap[T]) AddPtr(key string, t *T) {
+	if _, exists := m.inner.LoadOrStore(key, t); !exists {
+		m.count++
+	}
+}
+
+func (m *TypedMap[T]) ItemOrDefault(key string, defaultT T) (T, error) {
+	i, ok := m.inner.Load(key)
+	if ok {
+		t, ok := i.(T)
+		if !ok {
+			return defaultT, ErrorCastFail
+		}
+		return t, nil
+	} else {
+		return defaultT, ErrorNoSuchItem
+	}
+}
+
+func (m *TypedMap[T]) ItemPtr(key string) (*T, error) {
 	i, ok := m.inner.Load(key)
 	if ok {
 		t, ok := i.(*T)

@@ -31,9 +31,9 @@ func (l *MemLobby) Name() string {
 }
 
 func (l *MemLobby) AddPlayer(id string, p *player.Player) {
-	l.playerMap.Add(id, p)
+	l.playerMap.AddPtr(id, p)
 }
 
 func (l *MemLobby) FindPlayer(id string) (*player.Player, error) {
-	return l.playerMap.Item(id)
+	return l.playerMap.ItemPtr(id)
 }

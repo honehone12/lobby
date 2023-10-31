@@ -34,7 +34,8 @@ const (
 )
 
 var (
-	ErrorInvalidUuid = errors.New("invalid uuid format")
+	ErrorInvalidUuid          = errors.New("invalid uuid format")
+	ErrorDuplicatedConnection = errors.New("attempt of duplicated connection")
 )
 
 func LobbyCreate(c echo.Context) error {
@@ -103,6 +104,15 @@ func LobbyListen(c echo.Context) error {
 		return errres.BadRequest(err, c.Logger())
 	}
 
+	p, err := l.FindPlayer(playerId)
+	if err != nil {
+		return errres.BadRequest(err, c.Logger())
+	}
+
+	if p.HasConnection() {
+		return errres.BadRequest(ErrorDuplicatedConnection, c.Logger())
+	}
+
 	conn, err := ctx.WebSocketSwitcher().Upgrade(
 		c.Response(),
 		c.Request(),
@@ -111,6 +121,8 @@ func LobbyListen(c echo.Context) error {
 	if err != nil {
 		return errres.ServiceError(err, c.Logger())
 	}
+
+	p.SetConnection(conn)
 
 	return c.NoContent(http.StatusOK)
 }
