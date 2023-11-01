@@ -65,3 +65,18 @@ func (m *TypedMap[T]) ItemPtr(key string) (*T, error) {
 		return nil, ErrorNoSuchItem
 	}
 }
+
+func (m *TypedMap[T]) RangePtr(f func(t *T) error) error {
+	var err error = nil
+	m.inner.Range(func(k interface{}, v interface{}) bool {
+		ptr, ok := v.(*T)
+		if !ok {
+			err = ErrorCastFail
+			return false
+		}
+
+		err = f(ptr)
+		return err == nil
+	})
+	return err
+}

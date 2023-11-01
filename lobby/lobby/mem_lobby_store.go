@@ -6,19 +6,17 @@ import (
 )
 
 type MemLobbyStore struct {
-	lobbyCount int
-	lobbyMap   *generics.TypedMap[player.PlayerStore]
+	lobbyMap *generics.TypedMap[player.PlayerStore]
 }
 
 func NewMemLobyStore() *MemLobbyStore {
 	return &MemLobbyStore{
-		lobbyCount: 0,
-		lobbyMap:   generics.NewTypedMap[player.PlayerStore](),
+		lobbyMap: generics.NewTypedMap[player.PlayerStore](),
 	}
 }
 
-func (m *MemLobbyStore) AddLobby(id string, l player.PlayerStore) {
-	m.lobbyMap.Add(id, l)
+func (m *MemLobbyStore) AddLobby(l player.PlayerStore) {
+	m.lobbyMap.Add(l.Id(), l)
 }
 
 func (m *MemLobbyStore) FindLobby(id string) (player.PlayerStore, error) {

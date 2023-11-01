@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"lobby/lobby/lobby"
+	"lobby/lobby/message"
 	"lobby/lobby/player"
 	"lobby/server/context"
 	"lobby/server/errres"
@@ -54,12 +55,11 @@ func LobbyCreate(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	l := lobby.NewLobby(formData.LobbyName)
-	lid := l.Id()
-	ctx.LobbyStore().AddLobby(lid, l)
+	l := lobby.NewMemLobby(formData.LobbyName, c.Logger())
+	ctx.LobbyStore().AddLobby(l)
 
 	return c.JSON(http.StatusOK, &LobbyCreateResponse{
-		LobbyId: lid,
+		LobbyId: l.Id(),
 	})
 }
 
@@ -79,12 +79,16 @@ func LobbyJoin(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
+	n := message.NewNotification()
+	n.SetFlag(message.JoinBit)
+	n.SetMessage("player-name", formData.PlayerName)
+	l.BroadcastNotification(n)
+
 	p := player.NewPlayer(formData.PlayerName)
-	pid := p.Id()
-	l.AddPlayer(pid, p)
+	l.AddPlayer(p)
 
 	return c.JSON(http.StatusOK, &LobbyJoinResponse{
-		PlayerId: pid,
+		PlayerId: p.Id(),
 	})
 }
 
@@ -128,5 +132,5 @@ func LobbyListen(c echo.Context) error {
 
 	p.SetConnection(conn)
 
-	return c.NoContent(http.StatusOK)
+	return nil
 }

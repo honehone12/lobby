@@ -5,13 +5,52 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"lobby/lobby/message"
 	"lobby/server/handlers"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/gorilla/websocket"
 )
+
+type MessageListener struct {
+	conn *websocket.Conn
+
+	msgCh chan string
+	errCh chan error
+}
+
+func NewMessageListener(conn *websocket.Conn) *MessageListener {
+	return &MessageListener{
+		conn:  conn,
+		msgCh: make(chan string, 10),
+		errCh: make(chan error),
+	}
+}
+
+func (l *MessageListener) listen() {
+	format := "%s: %s\n"
+	buff := &message.Notification{}
+	defer l.Close()
+LOOP:
+	for {
+		err := l.conn.ReadJSON(buff)
+		if err != nil {
+			l.errCh <- err
+			break LOOP
+		}
+
+		for k, v := range buff.Message {
+			l.msgCh <- fmt.Sprintf(format, k, v)
+		}
+	}
+}
+
+func (l *MessageListener) Close() error {
+	return l.conn.Close()
+}
 
 type ClientParams struct {
 	address string
@@ -92,7 +131,7 @@ func sendLobbyJoin(p *ClientParams) error {
 	return nil
 }
 
-func sendLobbyListen(p *ClientParams) error {
+func sendLobbyListen(p *ClientParams) (*MessageListener, error) {
 	log.Println("/lobby/listen")
 
 	conn, res, err := websocket.DefaultDialer.Dial(
@@ -101,23 +140,31 @@ func sendLobbyListen(p *ClientParams) error {
 		nil,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if res.StatusCode != http.StatusSwitchingProtocols {
-		return errors.New("protocol switching does not work as expected")
+		return nil, errors.New("protocol switching does not work as expected")
 	}
 	defer res.Body.Close()
-	defer conn.Close()
 
-	return nil
+	return NewMessageListener(conn), nil
 }
 
 func main() {
+	if len(os.Args) <= 1 {
+		log.Fatal("use\n-c for create new lobby\n-l ID for join existing lobby")
+	}
+
 	params := &ClientParams{
 		address:    "127.0.0.1",
 		port:       "9990",
 		playerName: "nekomimi",
 		lobbyName:  "nekolobby",
+	}
+
+	doCreate := os.Args[1] == "-c"
+	if os.Args[1] == "-l" {
+		params.lobbyId = os.Args[2]
 	}
 
 	log.Printf(
@@ -138,17 +185,29 @@ func main() {
 	log.Println(string(body))
 	httpRes.Body.Close()
 
-	if err = sendLobbyCreate(params); err != nil {
-		log.Panic(err)
+	if doCreate {
+		if err = sendLobbyCreate(params); err != nil {
+			log.Panic(err)
+		}
 	}
 
 	if err = sendLobbyJoin(params); err != nil {
 		log.Panic(err)
 	}
 
-	if err = sendLobbyListen(params); err != nil {
+	listener, err := sendLobbyListen(params)
+	if err != nil {
 		log.Panic(err)
 	}
 
-	log.Println("done")
+	go listener.listen()
+
+	for {
+		select {
+		case msg := <-listener.msgCh:
+			log.Println(msg)
+		case err := <-listener.errCh:
+			log.Panic(err)
+		}
+	}
 }
