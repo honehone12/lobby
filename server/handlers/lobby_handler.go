@@ -21,6 +21,11 @@ type LobbyJoinForm struct {
 	PlayerName string `form:"player-name" validate:"required,alphanum,min=2,max=32"`
 }
 
+type LobbyListenParasm struct {
+	LobbyId  string `validate:"required,uuid4,min=36,max=36"`
+	PlayerId string `validate:"required,uuid4,min=36,max=36"`
+}
+
 type LobbyCreateResponse struct {
 	LobbyId string
 }
@@ -84,14 +89,9 @@ func LobbyJoin(c echo.Context) error {
 }
 
 func LobbyListen(c echo.Context) error {
-	lobbyId := c.Param("lobby")
-	if len(lobbyId) != IdLen {
-		return errres.BadRequest(ErrorInvalidUuid, c.Logger())
-	}
-
-	playerId := c.QueryParam("player")
-	if len(playerId) != IdLen {
-		return errres.BadRequest(ErrorInvalidUuid, c.Logger())
+	params := &LobbyListenParasm{
+		LobbyId:  c.Param("lobby"),
+		PlayerId: c.QueryParam("player"),
 	}
 
 	ctx, err := context.FromEchoCtx(c)
@@ -99,12 +99,16 @@ func LobbyListen(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	l, err := ctx.Components.LobbyStore().FindLobby(lobbyId)
+	if err = ctx.Validate(params); err != nil {
+		return errres.BadRequest(ErrorInvalidUuid, c.Logger())
+	}
+
+	l, err := ctx.Components.LobbyStore().FindLobby(params.LobbyId)
 	if err != nil {
 		return errres.BadRequest(err, c.Logger())
 	}
 
-	p, err := l.FindPlayer(playerId)
+	p, err := l.FindPlayer(params.PlayerId)
 	if err != nil {
 		return errres.BadRequest(err, c.Logger())
 	}
