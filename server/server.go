@@ -49,6 +49,9 @@ func (s *Server) Run() {
 	s.echo.Use(middleware.Logger())
 
 	s.echo.GET("/", handlers.Root)
+	s.echo.POST("/lobby/create", handlers.LobbyCreate)
+	s.echo.POST("/lobby/join", handlers.LobbyJoin)
+	s.echo.GET("/lobby/listen/:lobby", handlers.LobbyListen)
 
 	s.echo.Logger.SetLevel(log.INFO)
 	s.echo.Logger.Fatal(s.echo.Start(s.listenAt))
