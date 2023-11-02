@@ -18,6 +18,7 @@ type MemLobby struct {
 	activeCount uint
 	playerMap   *generics.TypedMap[player.Player]
 	ticker      *time.Ticker
+	closeCh     chan bool
 	logger      logger.Logger
 }
 
@@ -28,6 +29,7 @@ func NewMemLobby(name string, logger logger.Logger) *MemLobby {
 		activeCount: 0,
 		playerMap:   generics.NewTypedMap[player.Player](),
 		ticker:      time.NewTicker(LobbyPingInterval),
+		closeCh:     make(chan bool),
 		logger:      logger,
 	}
 	go l.ping()
@@ -96,34 +98,40 @@ func (l *MemLobby) BroadcastNotification(n *message.Notification) error {
 }
 
 func (l *MemLobby) ping() {
-	for range l.ticker.C {
-		activeCount := uint(0)
-		err := l.playerMap.RangePtr(func(p *player.Player) error {
-			if !p.HasConnection() {
+LOOP:
+	for {
+		select {
+		case <-l.ticker.C:
+			activeCount := uint(0)
+			err := l.playerMap.RangePtr(func(p *player.Player) error {
+				if !p.HasConnection() {
+					return nil
+				}
+
+				conn := p.Connection()
+				if err := conn.WriteMessage(
+					websocket.PingMessage,
+					message.PingBytes,
+				); err != nil {
+					defer conn.Close()
+					p.SetDisconnected()
+					l.logger.Warnf("disconnected the peer because of the previous error => %s", err)
+				} else {
+					activeCount++
+				}
+
 				return nil
+			})
+			if err != nil {
+				l.logger.Warnf("deleted the player because of the previous error => %s", err.E)
+				l.playerMap.DeleteOnError(err.K)
+				continue
 			}
 
-			conn := p.Connection()
-			if err := conn.WriteMessage(
-				websocket.PingMessage,
-				message.PingBytes,
-			); err != nil {
-				defer conn.Close()
-				p.SetDisconnected()
-				l.logger.Warnf("disconnected the peer because of the previous error => %s", err)
-			} else {
-				activeCount++
-			}
-
-			return nil
-		})
-		if err != nil {
-			l.logger.Warnf("deleted the player because of the previous error => %s", err.E)
-			l.playerMap.DeleteOnError(err.K)
-			continue
+			l.activeCount = activeCount
+		case <-l.closeCh:
+			break LOOP
 		}
-
-		l.activeCount = activeCount
 	}
 
 	l.logger.Info("ping goroutine of the memlobby has been stopped")
@@ -131,4 +139,5 @@ func (l *MemLobby) ping() {
 
 func (l *MemLobby) Delete() {
 	l.ticker.Stop()
+	l.closeCh <- true
 }
