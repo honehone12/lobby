@@ -2,16 +2,24 @@ package lobby
 
 import (
 	"lobby/generics"
+	"lobby/logger"
+	"time"
 )
 
 type MemLobbyStore struct {
 	lobbyMap *generics.TypedMap[Lobby]
+	ticker   *time.Ticker
+	logger   logger.Logger
 }
 
-func NewMemLobyStore() *MemLobbyStore {
-	return &MemLobbyStore{
+func NewMemLobyStore(logger logger.Logger) *MemLobbyStore {
+	s := &MemLobbyStore{
 		lobbyMap: generics.NewTypedMap[Lobby](),
+		ticker:   time.NewTicker(LobbyCleanUpInterval),
+		logger:   logger,
 	}
+	go s.cleanUp()
+	return s
 }
 
 func (s *MemLobbyStore) LobbyCount() uint {
@@ -26,6 +34,10 @@ func (s *MemLobbyStore) FindLobby(id string) (Lobby, error) {
 	return s.lobbyMap.ItemOrDefault(id, nil)
 }
 
+func (s *MemLobbyStore) DeleteLobby(id string) {
+	s.lobbyMap.Delete(id)
+}
+
 func (s *MemLobbyStore) GetSummaries() ([]LobbySummary, error) {
 	buff := make([]LobbySummary, s.lobbyMap.Count())
 	iter := 0
@@ -37,7 +49,10 @@ func (s *MemLobbyStore) GetSummaries() ([]LobbySummary, error) {
 		iter++
 		return nil
 	})
-	return buff, err
+	if err != nil {
+		return nil, err.E
+	}
+	return buff, nil
 }
 
 func (s *MemLobbyStore) GetDetail(id string) (*LobbyDetail, error) {
@@ -58,4 +73,26 @@ func (s *MemLobbyStore) GetDetail(id string) (*LobbyDetail, error) {
 		ActiveCount: l.ActiveCount(),
 		PlayerList:  list,
 	}, nil
+}
+
+func (s *MemLobbyStore) cleanUp() {
+	for range s.ticker.C {
+		cleanUpBuff := make(map[string]Lobby)
+		err := s.lobbyMap.Range(func(l Lobby) error {
+			if l.ActiveCount() == 0 {
+				cleanUpBuff[l.Id()] = l
+			}
+			return nil
+		})
+		if err != nil {
+			s.lobbyMap.DeleteOnError(err.K)
+			s.logger.Warnf("deleted the lobby because of the previous error => %s")
+		}
+
+		for k, l := range cleanUpBuff {
+			l.Delete()
+			s.lobbyMap.Delete(k)
+			s.logger.Warnf("deleted the lobby because no player are active")
+		}
+	}
 }

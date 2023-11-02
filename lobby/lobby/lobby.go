@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	LobbyPingInterval = time.Second
+	LobbyPingInterval    = time.Second
+	LobbyCleanUpInterval = time.Second * 10
 )
 
 type Lobby interface {
@@ -19,8 +20,11 @@ type Lobby interface {
 	GetPlayers() ([]player.PlayerInfo, error)
 	AddPlayer(*player.Player)
 	FindPlayer(string) (*player.Player, error)
+	DeletePlayer(string)
 
 	BroadcastNotification(*message.Notification) error
+
+	Delete()
 }
 
 type LobbySummary struct {

@@ -1,9 +1,10 @@
 package lobby
 
 type LobbyStore interface {
+	LobbyCount() uint
 	AddLobby(Lobby)
 	FindLobby(string) (Lobby, error)
-	LobbyCount() uint
+	DeleteLobby(string)
 
 	GetSummaries() ([]LobbySummary, error)
 	GetDetail(string) (*LobbyDetail, error)

@@ -17,9 +17,8 @@ type MemLobby struct {
 
 	activeCount uint
 	playerMap   *generics.TypedMap[player.Player]
-	ticker      time.Ticker
+	ticker      *time.Ticker
 	logger      logger.Logger
-	errCh       chan error
 }
 
 func NewMemLobby(name string, logger logger.Logger) *MemLobby {
@@ -28,9 +27,8 @@ func NewMemLobby(name string, logger logger.Logger) *MemLobby {
 		name:        name,
 		activeCount: 0,
 		playerMap:   generics.NewTypedMap[player.Player](),
-		ticker:      *time.NewTicker(LobbyPingInterval),
+		ticker:      time.NewTicker(LobbyPingInterval),
 		logger:      logger,
-		errCh:       make(chan error),
 	}
 	go l.ping()
 	return l
@@ -62,7 +60,10 @@ func (l *MemLobby) GetPlayers() ([]player.PlayerInfo, error) {
 		iter++
 		return nil
 	})
-	return buff, err
+	if err != nil {
+		return nil, err.E
+	}
+	return buff, nil
 }
 
 func (l *MemLobby) AddPlayer(p *player.Player) {
@@ -73,8 +74,12 @@ func (l *MemLobby) FindPlayer(id string) (*player.Player, error) {
 	return l.playerMap.ItemPtr(id)
 }
 
+func (l *MemLobby) DeletePlayer(id string) {
+	l.playerMap.Delete(id)
+}
+
 func (l *MemLobby) BroadcastNotification(n *message.Notification) error {
-	return l.playerMap.RangePtr(func(p *player.Player) error {
+	err := l.playerMap.RangePtr(func(p *player.Player) error {
 		if !p.HasConnection() {
 			return nil
 		}
@@ -84,12 +89,16 @@ func (l *MemLobby) BroadcastNotification(n *message.Notification) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err.E
+	}
+	return nil
 }
 
 func (l *MemLobby) ping() {
 	for range l.ticker.C {
 		activeCount := uint(0)
-		if err := l.playerMap.RangePtr(func(p *player.Player) error {
+		err := l.playerMap.RangePtr(func(p *player.Player) error {
 			if !p.HasConnection() {
 				return nil
 			}
@@ -99,18 +108,27 @@ func (l *MemLobby) ping() {
 				websocket.PingMessage,
 				message.PingBytes,
 			); err != nil {
-				l.logger.Warn(err)
 				defer conn.Close()
 				p.SetDisconnected()
+				l.logger.Warnf("disconnected the peer because of the previous error => %s", err)
 			} else {
 				activeCount++
 			}
 
 			return nil
-		}); err != nil {
-			l.errCh <- err
-		} else {
-			l.activeCount = activeCount
+		})
+		if err != nil {
+			l.logger.Warnf("deleted the player because of the previous error => %s", err.E)
+			l.playerMap.DeleteOnError(err.K)
+			continue
 		}
+
+		l.activeCount = activeCount
 	}
+
+	l.logger.Info("ping goroutine of the memlobby has been stopped")
+}
+
+func (l *MemLobby) Delete() {
+	l.ticker.Stop()
 }

@@ -10,7 +10,7 @@ import (
 
 func Run() {
 	e := echo.New()
-	s := lobby.NewMemLobyStore()
+	s := lobby.NewMemLobyStore(e.Logger)
 	server.NewServer(
 		e,
 		context.NewMetadata("LobyService", "0.0.1"),
