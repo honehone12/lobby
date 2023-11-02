@@ -5,6 +5,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type PlayerInfo struct {
+	Id     string
+	Name   string
+	Active bool
+}
+
 type Player struct {
 	id   string
 	name string
@@ -38,4 +44,8 @@ func (p *Player) Connection() *websocket.Conn {
 
 func (p *Player) SetConnection(conn *websocket.Conn) {
 	p.connection = conn
+}
+
+func (p *Player) SetDisconnected() {
+	p.connection = nil
 }

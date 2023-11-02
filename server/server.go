@@ -49,6 +49,8 @@ func (s *Server) Run() {
 	s.echo.Use(middleware.Logger())
 
 	s.echo.GET("/", handlers.Root)
+	s.echo.GET("/lobby/list", handlers.LobbyList)
+	s.echo.POST("/lobby/detail", handlers.LobbyDetail)
 	s.echo.POST("/lobby/create", handlers.LobbyCreate)
 	s.echo.POST("/lobby/join", handlers.LobbyJoin)
 	s.echo.GET("/lobby/listen/:lobby", handlers.LobbyListen)

@@ -1,8 +1,10 @@
 package lobby
 
-import "lobby/lobby/player"
-
 type LobbyStore interface {
-	AddLobby(player.PlayerStore)
-	FindLobby(string) (player.PlayerStore, error)
+	AddLobby(Lobby)
+	FindLobby(string) (Lobby, error)
+	LobbyCount() uint
+
+	GetSummaries() ([]LobbySummary, error)
+	GetDetail(string) (*LobbyDetail, error)
 }

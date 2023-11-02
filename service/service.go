@@ -10,13 +10,11 @@ import (
 
 func Run() {
 	e := echo.New()
-
+	s := lobby.NewMemLobyStore()
 	server.NewServer(
 		e,
 		context.NewMetadata("LobyService", "0.0.1"),
-		context.NewComponents(
-			lobby.NewMemLobyStore(),
-		),
+		context.NewComponents(s),
 		"127.0.0.1:9990",
 	).Run()
 }

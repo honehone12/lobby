@@ -1,0 +1,5 @@
+package message
+
+var (
+	PingBytes = []byte{0x6e, 0x79, 0x61, 0x6e}
+)
