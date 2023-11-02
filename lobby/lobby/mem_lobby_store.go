@@ -9,6 +9,7 @@ import (
 type MemLobbyStore struct {
 	lobbyMap *generics.TypedMap[Lobby]
 	ticker   *time.Ticker
+	closeCh  chan bool
 	logger   logger.Logger
 }
 
@@ -16,6 +17,7 @@ func NewMemLobyStore(logger logger.Logger) *MemLobbyStore {
 	s := &MemLobbyStore{
 		lobbyMap: generics.NewTypedMap[Lobby](),
 		ticker:   time.NewTicker(LobbyCleanUpInterval),
+		closeCh:  make(chan bool),
 		logger:   logger,
 	}
 	go s.cleanUp()
@@ -76,23 +78,31 @@ func (s *MemLobbyStore) GetDetail(id string) (*LobbyDetail, error) {
 }
 
 func (s *MemLobbyStore) cleanUp() {
-	for range s.ticker.C {
-		cleanUpBuff := make(map[string]Lobby)
-		err := s.lobbyMap.Range(func(l Lobby) error {
-			if l.ActiveCount() == 0 {
-				cleanUpBuff[l.Id()] = l
+LOOP:
+	for {
+		select {
+		case <-s.ticker.C:
+			cleanUpBuff := make(map[string]Lobby)
+			err := s.lobbyMap.Range(func(l Lobby) error {
+				if l.ActiveCount() == 0 {
+					cleanUpBuff[l.Id()] = l
+				}
+				return nil
+			})
+			if err != nil {
+				s.lobbyMap.DeleteOnError(err.K)
+				s.logger.Warnf("deleted the lobby because of the previous error => %s", err)
 			}
-			return nil
-		})
-		if err != nil {
-			s.lobbyMap.DeleteOnError(err.K)
-			s.logger.Warnf("deleted the lobby because of the previous error => %s", err)
-		}
 
-		for k, l := range cleanUpBuff {
-			l.Delete()
-			s.lobbyMap.Delete(k)
-			s.logger.Warnf("deleted the lobby because no player are active")
+			for k, l := range cleanUpBuff {
+				l.Delete()
+				s.lobbyMap.Delete(k)
+				s.logger.Warnf("deleted the lobby because no player are active")
+			}
+		case <-s.closeCh:
+			break LOOP
 		}
 	}
+
+	s.logger.Info("clean up goroutine of the memlobbystore has been stopped")
 }
