@@ -86,7 +86,7 @@ func (s *MemLobbyStore) cleanUp() {
 		})
 		if err != nil {
 			s.lobbyMap.DeleteOnError(err.K)
-			s.logger.Warnf("deleted the lobby because of the previous error => %s")
+			s.logger.Warnf("deleted the lobby because of the previous error => %s", err)
 		}
 
 		for k, l := range cleanUpBuff {
