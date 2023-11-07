@@ -4,6 +4,7 @@ import (
 	"errors"
 	"lobby/lobby/lobby"
 	"lobby/lobby/message"
+	"lobby/lobby/message/notification"
 	"lobby/lobby/player"
 	"lobby/server/context"
 	"lobby/server/errres"
@@ -72,8 +73,8 @@ func LobbyList(c echo.Context) error {
 }
 
 func LobbyDetail(c echo.Context) error {
-	formData := &LobbyDetailForm{}
-	if err := form.ProcessFormData(c, formData); err != nil {
+	formData := LobbyDetailForm{}
+	if err := form.ProcessFormData(c, &formData); err != nil {
 		return errres.BadRequest(err, c.Logger())
 	}
 
@@ -91,8 +92,8 @@ func LobbyDetail(c echo.Context) error {
 }
 
 func LobbyCreate(c echo.Context) error {
-	formData := &LobbyCreateForm{}
-	if err := form.ProcessFormData(c, formData); err != nil {
+	formData := LobbyCreateForm{}
+	if err := form.ProcessFormData(c, &formData); err != nil {
 		return errres.BadRequest(err, c.Logger())
 	}
 
@@ -110,8 +111,8 @@ func LobbyCreate(c echo.Context) error {
 }
 
 func LobbyJoin(c echo.Context) error {
-	formData := &LobbyJoinForm{}
-	if err := form.ProcessFormData(c, formData); err != nil {
+	formData := LobbyJoinForm{}
+	if err := form.ProcessFormData(c, &formData); err != nil {
 		return errres.BadRequest(err, c.Logger())
 	}
 
@@ -125,10 +126,13 @@ func LobbyJoin(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	n := message.NewNotification()
-	n.SetFlag(message.JoinBit)
-	n.SetMessage("player-name", formData.PlayerName)
-	l.BroadcastNotification(n)
+	e := message.NewEnvelope(message.Notification)
+	e.SetFlag(notification.Join)
+	e.SetMessage("player-name", formData.PlayerName)
+	err = l.BroadcastMessage(e)
+	if err != nil {
+		return errres.ServiceError(err, c.Logger())
+	}
 
 	p := player.NewPlayer(formData.PlayerName)
 	l.AddPlayer(p)
@@ -139,7 +143,7 @@ func LobbyJoin(c echo.Context) error {
 }
 
 func LobbyListen(c echo.Context) error {
-	params := &LobbyListenParasm{
+	params := LobbyListenParasm{
 		LobbyId:  c.Param("lobby"),
 		PlayerId: c.QueryParam("player"),
 	}
@@ -149,7 +153,7 @@ func LobbyListen(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	if err = ctx.Validate(params); err != nil {
+	if err = ctx.Validate(&params); err != nil {
 		return errres.BadRequest(ErrorInvalidUuid, c.Logger())
 	}
 

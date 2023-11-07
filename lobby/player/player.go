@@ -46,6 +46,9 @@ func (p *Player) SetConnection(conn *websocket.Conn) {
 	p.connection = conn
 }
 
-func (p *Player) SetDisconnected() {
-	p.connection = nil
+func (p *Player) Close() {
+	if p.connection != nil {
+		defer p.connection.Close()
+		p.connection = nil
+	}
 }

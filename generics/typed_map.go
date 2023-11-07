@@ -12,7 +12,7 @@ type TypedMap[T MapItem] struct {
 	inner *sync.Map
 }
 
-type Error struct {
+type IterationError struct {
 	K interface{}
 	V interface{}
 	E error
@@ -52,7 +52,7 @@ func (m *TypedMap[T]) Delete(key string) {
 	}
 }
 
-func (m *TypedMap[T]) DeleteOnError(k interface{}) {
+func (m *TypedMap[T]) DeleteRaw(k interface{}) {
 	if _, exists := m.inner.LoadAndDelete(k); exists {
 		m.count--
 	}
@@ -84,7 +84,7 @@ func (m *TypedMap[T]) ItemPtr(key string) (*T, error) {
 	}
 }
 
-func (m *TypedMap[T]) Range(f func(T) error) *Error {
+func (m *TypedMap[T]) Range(f func(T) error) *IterationError {
 	var err error = nil
 	var errk interface{} = nil
 	var errv interface{} = nil
@@ -105,7 +105,7 @@ func (m *TypedMap[T]) Range(f func(T) error) *Error {
 		return err == nil
 	})
 	if err != nil {
-		return &Error{
+		return &IterationError{
 			K: errk,
 			V: errv,
 			E: err,
@@ -114,7 +114,7 @@ func (m *TypedMap[T]) Range(f func(T) error) *Error {
 	return nil
 }
 
-func (m *TypedMap[T]) RangePtr(f func(*T) error) *Error {
+func (m *TypedMap[T]) RangePtr(f func(*T) error) *IterationError {
 	var err error = nil
 	var errk interface{} = nil
 	var errv interface{} = nil
@@ -135,7 +135,7 @@ func (m *TypedMap[T]) RangePtr(f func(*T) error) *Error {
 		return err == nil
 	})
 	if err != nil {
-		return &Error{
+		return &IterationError{
 			K: errk,
 			V: errv,
 			E: err,

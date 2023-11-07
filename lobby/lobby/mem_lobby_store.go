@@ -82,6 +82,8 @@ LOOP:
 	for {
 		select {
 		case <-s.ticker.C:
+			s.logger.Infof("[cleaning up] %d lobby stored", s.lobbyMap.Count())
+
 			cleanUpBuff := make(map[string]Lobby)
 			err := s.lobbyMap.Range(func(l Lobby) error {
 				if l.ActiveCount() == 0 {
@@ -90,7 +92,7 @@ LOOP:
 				return nil
 			})
 			if err != nil {
-				s.lobbyMap.DeleteOnError(err.K)
+				s.lobbyMap.DeleteRaw(err.K)
 				s.logger.Warnf("deleted the lobby because of the previous error => %s", err)
 			}
 
@@ -104,5 +106,5 @@ LOOP:
 		}
 	}
 
-	s.logger.Info("clean up goroutine of the memlobbystore has been stopped")
+	s.logger.Info("cleaning up goroutine of the memlobbystore has been stopped")
 }

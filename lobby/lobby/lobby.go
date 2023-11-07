@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	LobbyPingInterval    = time.Second
-	LobbyCleanUpInterval = time.Second * 10
+	LobbyConnectionTimeOut = time.Second
+	LobbyPingInterval      = time.Second
+	LobbyCleanUpInterval   = time.Second * 10
 )
 
 type Lobby interface {
@@ -22,7 +23,7 @@ type Lobby interface {
 	FindPlayer(string) (*player.Player, error)
 	DeletePlayer(string)
 
-	BroadcastNotification(*message.Notification) error
+	BroadcastMessage(*message.Envelope) error
 
 	Delete()
 }

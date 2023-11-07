@@ -32,18 +32,18 @@ func NewMessageListener(conn *websocket.Conn) *MessageListener {
 
 func (l *MessageListener) listen() {
 	format := "%s: %s\n"
-	buff := &message.Notification{}
 	defer l.Close()
 LOOP:
 	for {
-		err := l.conn.ReadJSON(buff)
+		envelope := message.Envelope{}
+		err := l.conn.ReadJSON(&envelope)
 		if err != nil {
 			l.errCh <- err
 			break LOOP
 		}
 
-		for k, v := range buff.Message {
-			l.msgCh <- fmt.Sprintf(format, k, v)
+		for _, msg := range envelope.Messages {
+			l.msgCh <- fmt.Sprintf(format, msg.Key, msg.Value)
 		}
 	}
 }

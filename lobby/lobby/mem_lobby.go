@@ -1,8 +1,10 @@
 package lobby
 
 import (
+	"fmt"
 	"lobby/generics"
 	"lobby/lobby/message"
+	"lobby/lobby/message/request"
 	"lobby/lobby/player"
 	"lobby/logger"
 	"time"
@@ -17,20 +19,32 @@ type MemLobby struct {
 
 	activeCount uint
 	playerMap   *generics.TypedMap[player.Player]
-	ticker      *time.Ticker
-	closeCh     chan bool
-	logger      logger.Logger
+
+	pingTicker    *time.Ticker
+	closeChPing   chan bool
+	closeChListen chan bool
+
+	logger logger.Logger
+}
+
+const (
+	SleepOnNoConnection = time.Millisecond * 100
+)
+
+func connectionErr(err error) error {
+	return fmt.Errorf("disconnected the peer because of the previous error => %s", err)
 }
 
 func NewMemLobby(name string, logger logger.Logger) *MemLobby {
 	l := &MemLobby{
-		id:          libuuid.NewString(),
-		name:        name,
-		activeCount: 0,
-		playerMap:   generics.NewTypedMap[player.Player](),
-		ticker:      time.NewTicker(LobbyPingInterval),
-		closeCh:     make(chan bool),
-		logger:      logger,
+		id:            libuuid.NewString(),
+		name:          name,
+		activeCount:   0,
+		playerMap:     generics.NewTypedMap[player.Player](),
+		pingTicker:    time.NewTicker(LobbyPingInterval),
+		closeChPing:   make(chan bool),
+		closeChListen: make(chan bool),
+		logger:        logger,
 	}
 	go l.ping()
 	return l
@@ -70,6 +84,7 @@ func (l *MemLobby) GetPlayers() ([]player.PlayerInfo, error) {
 
 func (l *MemLobby) AddPlayer(p *player.Player) {
 	l.playerMap.AddPtr(p.Id(), p)
+	go l.listen(p)
 }
 
 func (l *MemLobby) FindPlayer(id string) (*player.Player, error) {
@@ -80,15 +95,25 @@ func (l *MemLobby) DeletePlayer(id string) {
 	l.playerMap.Delete(id)
 }
 
-func (l *MemLobby) BroadcastNotification(n *message.Notification) error {
+func (l *MemLobby) BroadcastMessage(e *message.Envelope) error {
 	err := l.playerMap.RangePtr(func(p *player.Player) error {
 		if !p.HasConnection() {
 			return nil
 		}
 
-		if err := p.Connection().WriteJSON(n); err != nil {
-			l.logger.Warn(err)
+		conn := p.Connection()
+		t := time.Now().Add(LobbyConnectionTimeOut)
+		if err := conn.SetWriteDeadline(t); err != nil {
+			p.Close()
+			l.logger.Error(connectionErr(err))
+			return nil
 		}
+
+		if err := conn.WriteJSON(e); err != nil {
+			p.Close()
+			l.logger.Warn(connectionErr(err))
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -97,11 +122,47 @@ func (l *MemLobby) BroadcastNotification(n *message.Notification) error {
 	return nil
 }
 
+func (l *MemLobby) listen(p *player.Player) {
+LOOP:
+	for {
+		select {
+		case <-l.closeChListen:
+			break LOOP
+		default:
+			if !p.HasConnection() {
+				time.Sleep(SleepOnNoConnection)
+				continue
+			}
+
+			envelope := message.Envelope{}
+			if err := p.Connection().ReadJSON(&envelope); err != nil {
+				p.Close()
+				l.logger.Warn(connectionErr(err))
+				continue
+			}
+
+			if envelope.Direction != message.Request {
+				p.Close()
+				l.logger.Warn("disconnected the peer because of the malformated message")
+				continue
+			}
+
+			if envelope.GetFlag(request.Chat) {
+
+			}
+		}
+	}
+
+	l.logger.Info("listening goroutine of the memlobby has been stopped")
+}
+
 func (l *MemLobby) ping() {
 LOOP:
 	for {
 		select {
-		case <-l.ticker.C:
+		case <-l.pingTicker.C:
+			l.logger.Infof("[ping] %d players connected", l.playerMap.Count())
+
 			activeCount := uint(0)
 			err := l.playerMap.RangePtr(func(p *player.Player) error {
 				if !p.HasConnection() {
@@ -109,13 +170,17 @@ LOOP:
 				}
 
 				conn := p.Connection()
-				if err := conn.WriteMessage(
-					websocket.PingMessage,
-					message.PingBytes,
-				); err != nil {
-					defer conn.Close()
-					p.SetDisconnected()
-					l.logger.Warnf("disconnected the peer because of the previous error => %s", err)
+				t := time.Now().Add(LobbyConnectionTimeOut)
+				if err := conn.SetWriteDeadline(t); err != nil {
+					p.Close()
+					l.logger.Error(connectionErr(err))
+					return nil
+				}
+
+				err := conn.WriteMessage(websocket.PingMessage, message.PingBytes)
+				if err != nil {
+					p.Close()
+					l.logger.Warn(connectionErr(err))
 				} else {
 					activeCount++
 				}
@@ -123,13 +188,13 @@ LOOP:
 				return nil
 			})
 			if err != nil {
+				l.playerMap.DeleteRaw(err.K)
 				l.logger.Warnf("deleted the player because of the previous error => %s", err.E)
-				l.playerMap.DeleteOnError(err.K)
 				continue
 			}
 
 			l.activeCount = activeCount
-		case <-l.closeCh:
+		case <-l.closeChPing:
 			break LOOP
 		}
 	}
@@ -138,6 +203,7 @@ LOOP:
 }
 
 func (l *MemLobby) Delete() {
-	l.ticker.Stop()
-	l.closeCh <- true
+	l.pingTicker.Stop()
+	l.closeChListen <- true
+	l.closeChPing <- true
 }
