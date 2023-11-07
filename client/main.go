@@ -31,7 +31,7 @@ func NewMessageListener(conn *websocket.Conn) *MessageListener {
 }
 
 func (l *MessageListener) listen() {
-	format := "%s: %s\n"
+	format := "%s: %s"
 	defer l.Close()
 LOOP:
 	for {

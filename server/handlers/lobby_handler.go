@@ -125,17 +125,17 @@ func LobbyJoin(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	e := message.NewPlayerJoinNotification(formData.PlayerName)
+	p := player.NewPlayer(formData.PlayerName)
+	id := p.Id()
+	e := message.NewPlayerJoinNotification(formData.PlayerName, id)
 	if err = l.BroadcastMessage(e); err != nil {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	p := player.NewPlayer(formData.PlayerName)
-	p.SetJoinedAtNow()
 	l.AddPlayer(p)
 
 	return c.JSON(http.StatusOK, &LobbyJoinResponse{
-		PlayerId: p.Id(),
+		PlayerId: id,
 	})
 }
 

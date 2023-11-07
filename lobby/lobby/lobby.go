@@ -15,6 +15,7 @@ const (
 type Lobby interface {
 	Id() string
 	Name() string
+	CreatedAt() int64
 	PlayerCount() uint
 	ActiveCount() uint
 

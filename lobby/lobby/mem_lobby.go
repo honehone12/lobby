@@ -13,8 +13,9 @@ import (
 )
 
 type MemLobby struct {
-	id   string
-	name string
+	id        string
+	name      string
+	createdAt int64
 
 	activeCount uint
 	playerMap   *generics.TypedMap[player.Player]
@@ -38,6 +39,7 @@ func NewMemLobby(name string, logger logger.Logger) *MemLobby {
 	l := &MemLobby{
 		id:            libuuid.NewString(),
 		name:          name,
+		createdAt:     time.Now().Unix(),
 		activeCount:   0,
 		playerMap:     generics.NewTypedMap[player.Player](),
 		pingTicker:    time.NewTicker(LobbyPingInterval),
@@ -55,6 +57,10 @@ func (l *MemLobby) Id() string {
 
 func (l *MemLobby) Name() string {
 	return l.name
+}
+
+func (l *MemLobby) CreatedAt() int64 {
+	return l.createdAt
 }
 
 func (l *MemLobby) PlayerCount() uint {
@@ -156,29 +162,13 @@ LOOP:
 				continue
 			}
 
-			if err := l.processEnvelope(p, &envelope); err != nil {
+			if err := ProcessEnvelope(l, p, &envelope); err != nil {
 				l.logger.Panic(err)
 			}
 		}
 	}
 
 	l.logger.Info("listening goroutine of the memlobby has been stopped")
-}
-
-func (l *MemLobby) processEnvelope(p *player.Player, e *message.Envelope) error {
-	if e.GetFlag(message.Chat) {
-		msg, ok := e.GetMessage("chat-message")
-		if !ok || len(msg) == 0 {
-			return nil
-		}
-
-		e.Direction = message.Notification
-		if err := l.BroadcastMessage(e); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (l *MemLobby) recoverPing() {

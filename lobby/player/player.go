@@ -25,7 +25,7 @@ func NewPlayer(name string) *Player {
 	return &Player{
 		id:         libuuid.NewString(),
 		name:       name,
-		joinedAt:   0,
+		joinedAt:   time.Now().Unix(),
 		connection: nil,
 	}
 }
@@ -48,10 +48,6 @@ func (p *Player) HasConnection() bool {
 
 func (p *Player) Connection() *websocket.Conn {
 	return p.connection
-}
-
-func (p *Player) SetJoinedAtNow() {
-	p.joinedAt = time.Now().Unix()
 }
 
 func (p *Player) SetConnection(conn *websocket.Conn) {
