@@ -1,6 +1,8 @@
 package message
 
-import "slices"
+import (
+	"slices"
+)
 
 // this will make things simple for C#, C++ clients
 type Message struct {
@@ -13,11 +15,6 @@ type Envelope struct {
 	Flag      byte
 	Messages  []Message
 }
-
-const (
-	Request      = byte(1)
-	Notification = byte(2)
-)
 
 func NewEnvelope(direction byte) *Envelope {
 	return &Envelope{
@@ -39,13 +36,13 @@ func (e *Envelope) SetMessage(key string, value string) {
 	e.Messages = append(e.Messages, Message{Key: key, Value: value})
 }
 
-func (e *Envelope) GetMessage(key string) (bool, string) {
+func (e *Envelope) GetMessage(key string) (string, bool) {
 	idx := slices.IndexFunc(e.Messages, func(m Message) bool {
 		return m.Key == key
 	})
 	if idx < 0 {
-		return false, ""
+		return "", false
 	}
 
-	return true, e.Messages[idx].Value
+	return e.Messages[idx].Value, true
 }

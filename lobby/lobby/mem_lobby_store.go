@@ -77,13 +77,20 @@ func (s *MemLobbyStore) GetDetail(id string) (*LobbyDetail, error) {
 	}, nil
 }
 
+func (s *MemLobbyStore) recoverCleanUp() {
+	if r := recover(); r != nil {
+		s.logger.Warn("recover clean up goroutine")
+		go s.cleanUp()
+	}
+}
+
 func (s *MemLobbyStore) cleanUp() {
+	defer s.recoverCleanUp()
+
 LOOP:
 	for {
 		select {
 		case <-s.ticker.C:
-			s.logger.Infof("[cleaning up] %d lobby stored", s.lobbyMap.Count())
-
 			cleanUpBuff := make(map[string]Lobby)
 			err := s.lobbyMap.Range(func(l Lobby) error {
 				if l.ActiveCount() == 0 {
@@ -92,8 +99,7 @@ LOOP:
 				return nil
 			})
 			if err != nil {
-				s.lobbyMap.DeleteRaw(err.K)
-				s.logger.Warnf("deleted the lobby because of the previous error => %s", err)
+				s.logger.Panic(err)
 			}
 
 			for k, l := range cleanUpBuff {
@@ -101,6 +107,8 @@ LOOP:
 				s.lobbyMap.Delete(k)
 				s.logger.Warnf("deleted the lobby because no player are active")
 			}
+
+			s.logger.Debugf("[cleaning up] %d lobby stored", s.lobbyMap.Count())
 		case <-s.closeCh:
 			break LOOP
 		}

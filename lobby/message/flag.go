@@ -1,4 +1,4 @@
-package notification
+package message
 
 const (
 	Join       = 0b0000_0001

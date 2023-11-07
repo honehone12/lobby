@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"lobby/generics"
 	"lobby/lobby/message"
-	"lobby/lobby/message/request"
 	"lobby/lobby/player"
 	"lobby/logger"
 	"time"
@@ -105,13 +104,14 @@ func (l *MemLobby) BroadcastMessage(e *message.Envelope) error {
 		t := time.Now().Add(LobbyConnectionTimeOut)
 		if err := conn.SetWriteDeadline(t); err != nil {
 			p.Close()
-			l.logger.Error(connectionErr(err))
-			return nil
+			l.logger.Warn(connectionErr(err))
+			return err
 		}
 
 		if err := conn.WriteJSON(e); err != nil {
 			p.Close()
 			l.logger.Warn(connectionErr(err))
+			return nil
 		}
 
 		return nil
@@ -122,7 +122,16 @@ func (l *MemLobby) BroadcastMessage(e *message.Envelope) error {
 	return nil
 }
 
+func (l *MemLobby) recoverListen(p *player.Player) {
+	if r := recover(); r != nil {
+		l.logger.Warn("recover listen goroutine")
+		go l.listen(p)
+	}
+}
+
 func (l *MemLobby) listen(p *player.Player) {
+	defer l.recoverListen(p)
+
 LOOP:
 	for {
 		select {
@@ -141,14 +150,14 @@ LOOP:
 				continue
 			}
 
-			if envelope.Direction != message.Request {
+			if envelope.Direction != message.Request || envelope.Flag == 0 {
 				p.Close()
 				l.logger.Warn("disconnected the peer because of the malformated message")
 				continue
 			}
 
-			if envelope.GetFlag(request.Chat) {
-
+			if err := l.processEnvelope(p, &envelope); err != nil {
+				l.logger.Panic(err)
 			}
 		}
 	}
@@ -156,13 +165,36 @@ LOOP:
 	l.logger.Info("listening goroutine of the memlobby has been stopped")
 }
 
+func (l *MemLobby) processEnvelope(p *player.Player, e *message.Envelope) error {
+	if e.GetFlag(message.Chat) {
+		msg, ok := e.GetMessage("chat-message")
+		if !ok || len(msg) == 0 {
+			return nil
+		}
+
+		e.Direction = message.Notification
+		if err := l.BroadcastMessage(e); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (l *MemLobby) recoverPing() {
+	if r := recover(); r != nil {
+		l.logger.Warn("recover ping goroutine")
+		go l.ping()
+	}
+}
+
 func (l *MemLobby) ping() {
+	defer l.recoverPing()
+
 LOOP:
 	for {
 		select {
 		case <-l.pingTicker.C:
-			l.logger.Infof("[ping] %d players connected", l.playerMap.Count())
-
 			activeCount := uint(0)
 			err := l.playerMap.RangePtr(func(p *player.Player) error {
 				if !p.HasConnection() {
@@ -173,27 +205,30 @@ LOOP:
 				t := time.Now().Add(LobbyConnectionTimeOut)
 				if err := conn.SetWriteDeadline(t); err != nil {
 					p.Close()
-					l.logger.Error(connectionErr(err))
-					return nil
+					l.logger.Warn(connectionErr(err))
+					return err
 				}
 
 				err := conn.WriteMessage(websocket.PingMessage, message.PingBytes)
 				if err != nil {
 					p.Close()
 					l.logger.Warn(connectionErr(err))
-				} else {
-					activeCount++
+					return nil
 				}
 
+				activeCount++
 				return nil
 			})
 			if err != nil {
-				l.playerMap.DeleteRaw(err.K)
-				l.logger.Warnf("deleted the player because of the previous error => %s", err.E)
-				continue
+				l.logger.Panic(err)
 			}
 
 			l.activeCount = activeCount
+			l.logger.Debugf(
+				"[ping] %d players in map, %d players active",
+				l.PlayerCount(),
+				l.ActiveCount(),
+			)
 		case <-l.closeChPing:
 			break LOOP
 		}

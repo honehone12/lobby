@@ -4,7 +4,6 @@ import (
 	"errors"
 	"lobby/lobby/lobby"
 	"lobby/lobby/message"
-	"lobby/lobby/message/notification"
 	"lobby/lobby/player"
 	"lobby/server/context"
 	"lobby/server/errres"
@@ -126,11 +125,8 @@ func LobbyJoin(c echo.Context) error {
 		return errres.ServiceError(err, c.Logger())
 	}
 
-	e := message.NewEnvelope(message.Notification)
-	e.SetFlag(notification.Join)
-	e.SetMessage("player-name", formData.PlayerName)
-	err = l.BroadcastMessage(e)
-	if err != nil {
+	e := message.NewPlayerJoinNotification(formData.PlayerName)
+	if err = l.BroadcastMessage(e); err != nil {
 		return errres.ServiceError(err, c.Logger())
 	}
 
