@@ -198,6 +198,11 @@ LOOP:
 			activeCount := uint(0)
 			err := l.playerMap.RangePtr(func(p *player.Player) error {
 				if !p.HasConnection() {
+					if p.JoinedAt() >= time.Now().Add(-LobbyCleanUpInterval).Unix() {
+						// to prevent removing new connection
+						activeCount++
+					}
+
 					return nil
 				}
 

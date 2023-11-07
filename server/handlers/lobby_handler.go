@@ -131,6 +131,7 @@ func LobbyJoin(c echo.Context) error {
 	}
 
 	p := player.NewPlayer(formData.PlayerName)
+	p.SetJoinedAtNow()
 	l.AddPlayer(p)
 
 	return c.JSON(http.StatusOK, &LobbyJoinResponse{
