@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"lobby/lobby/message"
@@ -10,46 +11,59 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type MessageListener struct {
+type Connection struct {
 	conn *websocket.Conn
 
 	msgCh chan string
 	errCh chan error
 }
 
-func NewMessageListener(conn *websocket.Conn) *MessageListener {
-	return &MessageListener{
+func NewMessageListener(conn *websocket.Conn) *Connection {
+	return &Connection{
 		conn:  conn,
 		msgCh: make(chan string, 10),
 		errCh: make(chan error),
 	}
 }
 
-func (l *MessageListener) listen() {
+func (c *Connection) listen() {
 	format := "%s: %s"
-	defer l.Close()
+	defer c.Close()
 LOOP:
 	for {
 		envelope := message.Envelope{}
-		err := l.conn.ReadJSON(&envelope)
+		err := c.conn.ReadJSON(&envelope)
 		if err != nil {
-			l.errCh <- err
+			c.errCh <- err
 			break LOOP
 		}
 
 		for _, msg := range envelope.Messages {
-			l.msgCh <- fmt.Sprintf(format, msg.Key, msg.Value)
+			c.msgCh <- fmt.Sprintf(format, msg.Key, msg.Value)
 		}
 	}
 }
 
-func (l *MessageListener) Close() error {
-	return l.conn.Close()
+func (c *Connection) SendChatMessage() {
+	ticker := time.Tick(time.Second)
+LOOP:
+	for range ticker {
+		envelope := message.NewChatMessageRequest("nyannyan")
+		err := c.conn.WriteJSON(envelope)
+		if err != nil {
+			c.errCh <- err
+			break LOOP
+		}
+	}
+}
+
+func (c *Connection) Close() error {
+	return c.conn.Close()
 }
 
 type ClientParams struct {
@@ -131,7 +145,7 @@ func sendLobbyJoin(p *ClientParams) error {
 	return nil
 }
 
-func sendLobbyListen(p *ClientParams) (*MessageListener, error) {
+func sendLobbyListen(p *ClientParams) (*Connection, error) {
 	log.Println("/lobby/listen")
 
 	conn, res, err := websocket.DefaultDialer.Dial(
@@ -151,20 +165,21 @@ func sendLobbyListen(p *ClientParams) (*MessageListener, error) {
 }
 
 func main() {
-	if len(os.Args) <= 1 {
-		log.Fatal("use\n-c for create new lobby\n-l ID for join existing lobby")
-	}
+	createFlag := flag.Bool("c", false, "if true create new lobby")
+	sendChat := flag.Bool("s", false, "if true send chat message")
+	lobbyId := flag.String("j", "", "lobby id for join")
+	lobbyNama := flag.String("l", "nekolobby", "lobby name for create")
+	playerName := flag.String("n", "nekomimi", "player name")
+
+	flag.Parse()
 
 	params := &ClientParams{
 		address:    "127.0.0.1",
 		port:       "9990",
-		playerName: "nekomimi",
-		lobbyName:  "nekolobby",
-	}
-
-	doCreate := os.Args[1] == "-c"
-	if os.Args[1] == "-l" {
-		params.lobbyId = os.Args[2]
+		playerName: *playerName,
+		playerId:   "",
+		lobbyName:  *lobbyNama,
+		lobbyId:    *lobbyId,
 	}
 
 	log.Printf(
@@ -185,7 +200,7 @@ func main() {
 	log.Println(string(body))
 	httpRes.Body.Close()
 
-	if doCreate {
+	if *createFlag {
 		if err = sendLobbyCreate(params); err != nil {
 			log.Panic(err)
 		}
@@ -195,18 +210,23 @@ func main() {
 		log.Panic(err)
 	}
 
-	listener, err := sendLobbyListen(params)
+	conn, err := sendLobbyListen(params)
 	if err != nil {
 		log.Panic(err)
 	}
+	defer conn.Close()
 
-	go listener.listen()
+	go conn.listen()
+
+	if *sendChat {
+		go conn.SendChatMessage()
+	}
 
 	for {
 		select {
-		case msg := <-listener.msgCh:
+		case msg := <-conn.msgCh:
 			log.Println(msg)
-		case err := <-listener.errCh:
+		case err := <-conn.errCh:
 			log.Panic(err)
 		}
 	}
